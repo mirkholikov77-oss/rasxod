@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Расходы</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  /* Цвета берутся из темы Telegram; запасные — для просмотра в обычном браузере. */
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #111418);
+    --hint: var(--tg-theme-hint-color, #8a8f98);
+    --sec: var(--tg-theme-secondary-bg-color, #f1f2f6);
+    --accent: var(--tg-theme-button-color, #2ea6ff);
+    --accent-text: var(--tg-theme-button-text-color, #ffffff);
+    --danger: var(--tg-theme-destructive-text-color, #e5484d);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not(.tg) { --bg: #17212b; --text: #f5f5f5; --hint: #7d8b99; --sec: #232e3c; --accent: #5288c1; }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; }
+  body { padding: 10px 16px calc(20px + env(safe-area-inset-bottom)); -webkit-user-select: none; user-select: none; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+
+  .tabs { display: flex; gap: 3px; padding: 3px; background: var(--sec); border-radius: 12px; }
+  .tabs button { flex: 1; border: 0; background: transparent; padding: 8px 0; border-radius: 9px; font-weight: 600; font-size: 15px; }
+  .tabs button.on { background: var(--bg); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+
+  .amount { text-align: center; font-size: 46px; font-weight: 700; margin: 18px 0 2px; min-height: 58px;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+  .amount.empty { color: var(--hint); }
+  .amount small { font-size: 20px; font-weight: 600; color: var(--hint); margin-left: 6px; }
+
+  .cats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 10px; }
+  .cat { border: 2px solid transparent; background: var(--sec); border-radius: 14px; padding: 9px 4px 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 13px; line-height: 1.15; text-align: center; }
+  .cat .e { font-size: 24px; line-height: 1; }
+  .cat.on { border-color: var(--accent); }
+
+  .note { width: 100%; border: 2px solid transparent; outline: 0; background: var(--sec); color: var(--text);
+    border-radius: 12px; padding: 11px 12px; font: inherit; font-size: 16px; -webkit-user-select: text; user-select: text; }
+  .note::placeholder { color: var(--hint); }
+  .note.need { border-color: var(--danger); }
+
+  .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+  .pad button { height: 52px; border: 0; border-radius: 12px; background: var(--sec); font-size: 24px; }
+  .pad button:active, .cat:active { opacity: .6; }
+
+  .fallback { display: none; width: 100%; margin-top: 14px; height: 50px; border: 0; border-radius: 12px;
+    background: var(--accent); color: var(--accent-text); font-weight: 600; }
+  .fallback:disabled { opacity: .45; }
+
+  .seg { display: flex; gap: 6px; margin: 16px 0 6px; }
+  .seg button { flex: 1; border: 0; background: var(--sec); border-radius: 20px; padding: 7px 0; font-size: 14px; font-weight: 600; }
+  .seg button.on { background: var(--accent); color: var(--accent-text); }
+
+  .period { text-align: center; color: var(--hint); font-size: 14px; margin-top: 10px; }
+  .donut { display: block; width: 210px; height: 210px; margin: 8px auto 4px; }
+  .total { text-align: center; color: var(--hint); font-size: 14px; margin-bottom: 14px; }
+
+  .rows { display: flex; flex-direction: column; gap: 12px; }
+  .row .top { display: flex; align-items: baseline; gap: 8px; }
+  .row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .sum { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .row .pct { color: var(--hint); font-size: 13px; width: 38px; text-align: right; }
+  .bar { height: 6px; border-radius: 3px; background: var(--sec); margin-top: 5px; overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 3px; }
+
+  h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .4px; color: var(--hint); margin: 22px 0 8px; font-weight: 600; }
+  .items { display: flex; flex-direction: column; background: var(--sec); border-radius: 12px; overflow: hidden; }
+  .item { display: flex; gap: 10px; align-items: center; padding: 10px 12px; }
+  .item + .item { border-top: 1px solid color-mix(in srgb, var(--hint) 20%, transparent); }
+  .item .t { color: var(--hint); font-size: 13px; width: 40px; font-variant-numeric: tabular-nums; }
+  .item .w { flex: 1; min-width: 0; }
+  .item .w div:last-child { color: var(--hint); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .s { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .empty-box { text-align: center; color: var(--hint); padding: 40px 10px; }
+  .foot { text-align: center; color: var(--hint); font-size: 12px; margin-top: 22px; }
+  .undo { display: block; margin: 10px auto 0; border: 0; background: transparent; color: var(--danger); font-size: 15px; padding: 8px 12px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+  <div class="tabs">
+    <button id="tabAdd" class="on">Добавить</button>
+    <button id="tabRep">Отчёт</button>
+  </div>
+
+  <section id="add">
+    <div id="amount" class="amount empty">0</div>
+    <div id="cats" class="cats"></div>
+    <input id="note" class="note" maxlength="60" placeholder="Что именно? (необязательно)" autocomplete="off">
+    <div class="pad" id="pad"></div>
+    <button id="fallback" class="fallback">Записать</button>
+  </section>
+
+  <section id="rep" hidden>
+    <div class="seg" id="seg">
+      <button data-p="day">День</button>
+      <button data-p="week" class="on">Неделя</button>
+      <button data-p="month">Месяц</button>
+    </div>
+    <div id="report"></div>
+  </section>
+
+<script>
+(function () {
+  var DEFAULT_CATS = ["🍔 Еда", "☕ Кафе", "🚕 Транспорт", "🏠 Дом и связь", "🎮 Развлечения", "👕 Одежда", "💊 Здоровье", "🎁 Подарки", "📦 Другое"];
+  var COLORS = ["#4C8DF6", "#F5A524", "#22B07D", "#E5484D", "#8E6CEF", "#14B8C4", "#F07CB0", "#D97706", "#94A3B8", "#65A30D", "#0EA5E9", "#B45309"];
+
+  var tg = window.Telegram && window.Telegram.WebApp;
+  var inTg = !!(tg && tg.initData);
+  if (inTg) { tg.ready(); tg.expand(); document.documentElement.classList.add("tg"); }
+
+  // Данные от бота лежат в адресе: #d=<base64url(JSON)>.
+  function readData() {
+    var src = location.hash.slice(1) + "&" + location.search.slice(1);
+    var parts = src.split("&");
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].indexOf("d=") !== 0) continue;
+      try {
+        var b = decodeURIComponent(parts[i].slice(2)).replace(/-/g, "+").replace(/_/g, "/");
+        while (b.length % 4) b += "=";
+        var bin = atob(b), bytes = new Uint8Array(bin.length);
+        for (var j = 0; j < bin.length; j++) bytes[j] = bin.charCodeAt(j);
+        return JSON.parse(new TextDecoder().decode(bytes));
+      } catch (e) { return null; }
+    }
+    return null;
+  }
+
+  var D = readData();
+  var cats = D ? D.cats : DEFAULT_CATS;
+  var activeCount = D ? D.n : DEFAULT_CATS.length;
+  var cur = D ? D.cur : "";
+
+  function fmt(x) {
+    return Math.round(x).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  }
+  function money(x) { return fmt(x) + (cur ? " " + cur : ""); }
+  function splitCat(c) {
+    var m = c.match(/^(\S+)\s+(.+)$/);
+    if (m && !/[A-Za-zА-Яа-яЁё0-9]/.test(m[1])) return { e: m[1], n: m[2] };
+    return { e: "•", n: c };
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function haptic(kind) { if (inTg && tg.HapticFeedback) { kind === "sel" ? tg.HapticFeedback.selectionChanged() : tg.HapticFeedback.impactOccurred("light"); } }
+  function plural(n, a, b, c) { var x = n % 100, y = n % 10; if (x >= 11 && x <= 14) return c; if (y === 1) return a; if (y >= 2 && y <= 4) return b; return c; }
+
+  // ---------- Добавление ----------
+  var amountStr = "", catIdx = -1;
+  var $amount = document.getElementById("amount"), $note = document.getElementById("note");
+  var $cats = document.getElementById("cats"), $pad = document.getElementById("pad"), $fallback = document.getElementById("fallback");
+
+  for (var i = 0; i < activeCount; i++) {
+    var p = splitCat(cats[i]);
+    var b = document.createElement("button");
+    b.className = "cat"; b.dataset.i = i;
+    b.innerHTML = '<span class="e">' + esc(p.e) + "</span><span>" + esc(p.n) + "</span>";
+    $cats.appendChild(b);
+  }
+  $cats.addEventListener("click", function (e) {
+    var b = e.target.closest(".cat"); if (!b) return;
+    catIdx = +b.dataset.i; haptic("sel");
+    [].forEach.call($cats.children, function (x) { x.classList.toggle("on", x === b); });
+    $note.placeholder = isOther() ? "Что именно? (обязательно)" : "Что именно? (необязательно)";
+    if (isOther() && !$note.value.trim()) $note.focus();
+    refresh();
+  });
+
+  ["1", "2", "3", "4", "5", "6", "7", "8", "9", "000", "0", "⌫"].forEach(function (k) {
+    var b = document.createElement("button"); b.textContent = k; b.dataset.k = k;
+    if (k === "000") b.style.fontSize = "20px";
+    $pad.appendChild(b);
+  });
+  $pad.addEventListener("click", function (e) {
+    var k = e.target.dataset && e.target.dataset.k; if (!k) return;
+    haptic();
+    if (k === "⌫") amountStr = amountStr.slice(0, -1);
+    else if (amountStr.length < 10) amountStr = (amountStr + k).replace(/^0+/, "");
+    refresh();
+  });
+  $note.addEventListener("input", function () { $note.classList.remove("need"); refresh(); });
+  $note.addEventListener("keydown", function (e) { if (e.key === "Enter") $note.blur(); });
+
+  function amount() { return +amountStr || 0; }
+  function isOther() { return catIdx >= 0 && /друго/i.test(cats[catIdx]); }
+
+  function refresh() {
+    var a = amount();
+    $amount.className = "amount" + (a ? "" : " empty");
+    $amount.innerHTML = fmt(a) + (cur ? "<small>" + esc(cur) + "</small>" : "");
+    var ready = a > 0 && catIdx >= 0;
+    var label = a > 0 ? "Записать " + money(a) : "Записать";
+    if (inTg && !$add.hidden) {
+      tg.MainButton.setText(label);
+      ready ? tg.MainButton.show() : tg.MainButton.hide();
+    }
+    $fallback.textContent = label; $fallback.disabled = !ready;
+  }
+
+  function submit() {
+    var a = amount();
+    if (!a || catIdx < 0) return;
+    var note = $note.value.trim();
+    if (isOther() && !note) {
+      $note.classList.add("need"); $note.focus();
+      if (inTg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
+      return;
+    }
+    var payload = JSON.stringify({ a: "add", s: a, c: cats[catIdx], m: note });
+    if (inTg) tg.sendData(payload); // Telegram сам закроет окно и передаст трату боту
+    else alert("В Telegram это отправилось бы боту:\n" + payload);
+  }
+  if (inTg) tg.MainButton.onClick(submit); else $fallback.style.display = "block";
+  $fallback.addEventListener("click", submit);
+
+  // ---------- Вкладки ----------
+  var $add = document.getElementById("add"), $rep = document.getElementById("rep");
+  var $tabAdd = document.getElementById("tabAdd"), $tabRep = document.getElementById("tabRep");
+  function show(rep) {
+    $add.hidden = rep; $rep.hidden = !rep;
+    $tabAdd.classList.toggle("on", !rep); $tabRep.classList.toggle("on", rep);
+    if (inTg && rep) tg.MainButton.hide();
+    if (rep) renderReport(); else refresh();
+  }
+  $tabAdd.addEventListener("click", function () { haptic("sel"); show(false); });
+  $tabRep.addEventListener("click", function () { haptic("sel"); show(true); });
+
+  // ---------- Отчёт ----------
+  var period = "week";
+  document.getElementById("seg").addEventListener("click", function (e) {
+    var p = e.target.dataset && e.target.dataset.p; if (!p) return;
+    period = p; haptic("sel");
+    [].forEach.call(this.children, function (x) { x.classList.toggle("on", x.dataset.p === p); });
+    renderReport();
+  });
+
+  function parseDate(s) { var a = s.split("-"); return new Date(+a[0], a[1] - 1, +a[2]); }
+  function addDays(d, n) { var x = new Date(d); x.setDate(x.getDate() + n); return x; }
+  function ddmm(d) { return ("0" + d.getDate()).slice(-2) + "." + ("0" + (d.getMonth() + 1)).slice(-2); }
+  var MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+  var MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+
+  function renderReport() {
+    var $r = document.getElementById("report");
+    if (!D) {
+      $r.innerHTML = '<div class="empty-box">Открой приложение кнопкой «📱 Приложение» в чате с ботом — тогда здесь появятся отчёты.</div>';
+      return;
+    }
+    var start = parseDate(D.s), today = parseDate(D.t);
+    var ti = Math.round((today - start) / 864e5);
+    var from, days, title;
+    if (period === "day") { from = ti; days = 1; title = "Сегодня, " + today.getDate() + " " + MONTHS_GEN[today.getMonth()]; }
+    else if (period === "week") {
+      var dow = (today.getDay() + 6) % 7; from = ti - dow; days = dow + 1;
+      title = "Неделя " + ddmm(addDays(today, -dow)) + " – " + ddmm(addDays(today, 6 - dow));
+    } else { from = ti - (today.getDate() - 1); days = today.getDate(); title = MONTHS[today.getMonth()] + " " + today.getFullYear(); }
+
+    var by = {}, total = 0, count = 0;
+    D.d.forEach(function (r) { if (r[0] >= from && r[0] <= ti) { by[r[1]] = (by[r[1]] || 0) + r[2]; total += r[2]; count += r[3]; } });
+    var list = Object.keys(by).map(function (k) { return { c: +k, s: by[k] }; }).sort(function (a, b) { return b.s - a.s; });
+
+    var h = '<div class="period">' + esc(title) + "</div>";
+    if (!total) {
+      h += '<div class="empty-box">Пока пусто.<br>Добавь трату на вкладке «Добавить».</div>';
+    } else {
+      // Кольцевая диаграмма: окружность длиной 100, сегменты через stroke-dasharray.
+      var svg = '<svg class="donut" viewBox="0 0 42 42"><circle cx="21" cy="21" r="15.915" fill="none" stroke="var(--sec)" stroke-width="5"/>';
+      var acc = 0, gap = list.length > 1 ? 0.6 : 0;
+      list.forEach(function (x) {
+        var pct = x.s / total * 100, len = Math.max(pct - gap, 0.3);
+        svg += '<circle cx="21" cy="21" r="15.915" fill="none" stroke="' + COLORS[x.c % COLORS.length] + '" stroke-width="5" stroke-dasharray="' +
+          len.toFixed(2) + " " + (100 - len).toFixed(2) + '" stroke-dashoffset="' + (25 - acc).toFixed(2) + '"/>';
+        acc += pct;
+      });
+      svg += '<text x="21" y="21.2" text-anchor="middle" font-size="5.2" font-weight="700" fill="var(--text)">' + fmt(total) + "</text>";
+      svg += '<text x="21" y="26.6" text-anchor="middle" font-size="2.8" fill="var(--hint)">' + esc(cur || "итого") + "</text></svg>";
+      h += svg;
+      h += '<div class="total">' + count + " " + plural(count, "трата", "траты", "трат") +
+        (days > 1 ? " · в среднем " + money(total / days) + " в день" : "") + "</div>";
+      h += '<div class="rows">';
+      list.forEach(function (x) {
+        var pct = x.s / total * 100, col = COLORS[x.c % COLORS.length];
+        h += '<div class="row"><div class="top"><span class="name">' + esc(cats[x.c] || "?") + '</span><span class="sum">' + money(x.s) +
+          '</span><span class="pct">' + Math.round(pct) + '%</span></div><div class="bar"><i style="width:' + pct.toFixed(1) + "%;background:" + col + '"></i></div></div>';
+      });
+      h += "</div>";
+    }
+    if (period === "day" && D.i && D.i.length) {
+      h += '<h3>Записи за сегодня</h3><div class="items">';
+      D.i.forEach(function (it) {
+        h += '<div class="item"><span class="t">' + esc(it[0]) + '</span><div class="w"><div>' + esc(cats[it[1]] || "?") + "</div>" +
+          (it[3] ? "<div>" + esc(it[3]) + "</div>" : "") + '</div><span class="s">' + money(it[2]) + "</span></div>";
+      });
+      h += "</div>";
+    }
+    if (period === "month" && D.p) h += '<div class="total" style="margin-top:16px">Прошлый месяц: ' + money(D.p) + "</div>";
+    h += '<div class="foot">Данные на ' + esc(D.u) + "</div>";
+    if (D.d.length) h += '<button class="undo" id="undo">Удалить последнюю запись</button>';
+    $r.innerHTML = h;
+    var u = document.getElementById("undo");
+    if (u) u.addEventListener("click", function () {
+      var go = function (ok) { if (ok) inTg ? tg.sendData(JSON.stringify({ a: "undo" })) : alert("В Telegram бот удалил бы последнюю запись"); };
+      inTg ? tg.showConfirm("Удалить последнюю запись?", go) : go(confirm("Удалить последнюю запись?"));
+    });
+  }
+
+  refresh();
+})();
+</script>
+</body>
+</html>
